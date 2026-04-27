@@ -1,0 +1,436 @@
+import { useState, useMemo } from "react";
+import { Link } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  useGetQuestions, 
+  useSubmitAssessment 
+} from "@workspace/api-client-react";
+import type { Question, AssessmentAnswer, AssessmentResult } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Shield, ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, Info, Calendar, MapPin, MessageSquare } from "lucide-react";
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+} from "recharts";
+
+type WizardStep = 'intro' | 'questions' | 'review' | 'result';
+
+export default function Assessment() {
+  const { data: questionsData, isLoading: isLoadingQuestions } = useGetQuestions();
+  const submitAssessment = useSubmitAssessment();
+  
+  const [step, setStep] = useState<WizardStep>('intro');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [result, setResult] = useState<AssessmentResult | null>(null);
+
+  // Logic to filter conditional questions based on current answers
+  const activeQuestions = useMemo(() => {
+    if (!questionsData?.questions) return [];
+    
+    return questionsData.questions.filter((q) => {
+      if (!q.conditional || !q.showIf) return true;
+      
+      const dependentAnswer = answers[q.showIf.questionId!];
+      if (!dependentAnswer) return false;
+
+      // Handle array answers (multi-select) vs single value
+      if (Array.isArray(dependentAnswer)) {
+        return q.showIf.equals?.some(val => dependentAnswer.includes(val)) ?? false;
+      }
+      
+      return q.showIf.equals?.includes(dependentAnswer as string) ?? false;
+    });
+  }, [questionsData, answers]);
+
+  const currentQuestion = activeQuestions[currentQuestionIndex];
+  const progress = activeQuestions.length > 0 ? ((currentQuestionIndex) / activeQuestions.length) * 100 : 0;
+
+  const handleAnswerChange = (value: any) => {
+    if (!currentQuestion) return;
+    
+    setAnswers(prev => ({
+      ...prev,
+      [currentQuestion.id]: value
+    }));
+  };
+
+  const handleNext = () => {
+    if (currentQuestionIndex < activeQuestions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      setStep('review');
+    }
+  };
+
+  const handleBack = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    } else {
+      setStep('intro');
+    }
+  };
+
+  const handleSubmit = async () => {
+    const formattedAnswers: AssessmentAnswer[] = Object.entries(answers).map(([questionId, value]) => ({
+      questionId,
+      value
+    }));
+
+    try {
+      const res = await submitAssessment.mutateAsync({
+        data: { answers: formattedAnswers }
+      });
+      setResult(res);
+      setStep('result');
+    } catch (error) {
+      console.error("Failed to submit assessment", error);
+      // Let react-query handle toast if configured, or add specific error handling here
+    }
+  };
+
+  const renderIntro = () => (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-2xl mx-auto py-12"
+    >
+      <div className="text-center mb-10">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-6">
+          <Shield className="w-8 h-8" />
+        </div>
+        <h1 className="text-3xl font-bold mb-4">Evaluación de Riesgo Confidencial</h1>
+        <p className="text-lg text-muted-foreground">
+          Responde algunas preguntas sobre tu estilo de vida para entender mejor tu riesgo de exposición al VIH.
+        </p>
+      </div>
+
+      <Card className="mb-8 border-primary/20 bg-primary/5">
+        <CardContent className="p-6">
+          <h3 className="font-semibold text-lg mb-4 flex items-center">
+            <Info className="w-5 h-5 mr-2 text-primary" />
+            Antes de empezar
+          </h3>
+          <ul className="space-y-3 text-muted-foreground">
+            <li className="flex items-start">
+              <CheckCircle2 className="w-5 h-5 mr-3 text-primary shrink-0 mt-0.5" />
+              <span><strong>Anónimo y Privado:</strong> No te pediremos tu nombre ni datos que puedan identificarte.</span>
+            </li>
+            <li className="flex items-start">
+              <CheckCircle2 className="w-5 h-5 mr-3 text-primary shrink-0 mt-0.5" />
+              <span><strong>Sin Prejuicios:</strong> Esta herramienta no juzga. Tu honestidad nos permite darte las mejores recomendaciones.</span>
+            </li>
+            <li className="flex items-start">
+              <CheckCircle2 className="w-5 h-5 mr-3 text-primary shrink-0 mt-0.5" />
+              <span><strong>Basado en Ciencia:</strong> Las preguntas siguen guías clínicas internacionales.</span>
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <div className="text-center">
+        <Button size="lg" onClick={() => setStep('questions')} className="w-full sm:w-auto h-14 px-10 text-lg">
+          Comenzar Evaluación
+        </Button>
+      </div>
+    </motion.div>
+  );
+
+  const renderQuestionInput = (q: Question) => {
+    const value = answers[q.id];
+
+    switch (q.type) {
+      case 'single':
+        return (
+          <RadioGroup 
+            value={value as string || ""} 
+            onValueChange={handleAnswerChange}
+            className="flex flex-col gap-3 mt-6"
+          >
+            {q.options?.map((opt) => (
+              <div key={opt.value}>
+                <RadioGroupItem value={opt.value} id={`${q.id}-${opt.value}`} className="peer sr-only" />
+                <Label
+                  htmlFor={`${q.id}-${opt.value}`}
+                  className="flex items-center justify-between rounded-xl border-2 border-muted bg-card p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 cursor-pointer transition-all"
+                >
+                  <span className="font-medium">{opt.label}</span>
+                </Label>
+              </div>
+            ))}
+          </RadioGroup>
+        );
+      
+      case 'multi':
+        const currentVals = (value as string[]) || [];
+        return (
+          <div className="flex flex-col gap-3 mt-6">
+            {q.options?.map((opt) => {
+              const isChecked = currentVals.includes(opt.value);
+              return (
+                <div key={opt.value} className="relative flex items-start">
+                  <div className="flex h-6 items-center">
+                    <Checkbox
+                      id={`${q.id}-${opt.value}`}
+                      checked={isChecked}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          handleAnswerChange([...currentVals, opt.value]);
+                        } else {
+                          handleAnswerChange(currentVals.filter(v => v !== opt.value));
+                        }
+                      }}
+                      className="w-5 h-5"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm leading-6">
+                    <label htmlFor={`${q.id}-${opt.value}`} className="font-medium text-foreground cursor-pointer">
+                      {opt.label}
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'number':
+        return (
+          <div className="mt-6">
+            <Input
+              type="number"
+              value={value || ""}
+              onChange={(e) => handleAnswerChange(Number(e.target.value))}
+              className="max-w-[200px] text-lg p-6"
+              placeholder="0"
+              min={0}
+            />
+          </div>
+        );
+      default:
+        return <div>Unsupported question type</div>;
+    }
+  };
+
+  const renderQuestions = () => {
+    if (isLoadingQuestions) {
+      return <div className="py-20 text-center text-muted-foreground">Cargando preguntas...</div>;
+    }
+
+    if (!currentQuestion) return null;
+
+    const hasAnsweredCurrent = answers[currentQuestion.id] !== undefined && 
+      (Array.isArray(answers[currentQuestion.id]) ? answers[currentQuestion.id].length > 0 : answers[currentQuestion.id] !== "");
+
+    return (
+      <div className="max-w-2xl mx-auto py-8">
+        <div className="mb-8">
+          <div className="flex justify-between text-sm text-muted-foreground mb-2">
+            <span>Pregunta {currentQuestionIndex + 1} de {activeQuestions.length}</span>
+            <span>{Math.round(progress)}% completado</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+
+        <motion.div
+          key={currentQuestion.id}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h2 className="text-2xl font-bold mb-2 text-foreground">{currentQuestion.text}</h2>
+          {currentQuestion.helpText && (
+            <p className="text-muted-foreground">{currentQuestion.helpText}</p>
+          )}
+
+          {renderQuestionInput(currentQuestion)}
+        </motion.div>
+
+        <div className="flex justify-between mt-12 pt-6 border-t">
+          <Button variant="ghost" onClick={handleBack} className="text-muted-foreground">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Atrás
+          </Button>
+          <Button onClick={handleNext} disabled={!hasAnsweredCurrent}>
+            Siguiente
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderReview = () => (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-2xl mx-auto py-12"
+    >
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold mb-4">Revisar y Enviar</h2>
+        <p className="text-muted-foreground">
+          Estás a un paso de conocer tu nivel de riesgo y obtener recomendaciones.
+        </p>
+      </div>
+
+      <Card className="mb-8 border-dashed">
+        <CardContent className="p-8 text-center text-muted-foreground">
+          Has completado {activeQuestions.length} preguntas.<br/>
+          Tus respuestas serán procesadas de forma anónima y segura.
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <Button variant="outline" size="lg" onClick={() => setStep('questions')}>
+          Volver a las preguntas
+        </Button>
+        <Button size="lg" onClick={handleSubmit} disabled={submitAssessment.isPending}>
+          {submitAssessment.isPending ? "Procesando..." : "Ver Resultados"}
+        </Button>
+      </div>
+    </motion.div>
+  );
+
+  const renderResult = () => {
+    if (!result) return null;
+
+    const riskColors = {
+      low: "text-emerald-600 bg-emerald-50 border-emerald-200",
+      moderate: "text-amber-600 bg-amber-50 border-amber-200",
+      high: "text-orange-600 bg-orange-50 border-orange-200",
+      very_high: "text-destructive bg-destructive/10 border-destructive/20",
+    };
+    
+    const riskLabels = {
+      low: "Riesgo Bajo",
+      moderate: "Riesgo Moderado",
+      high: "Riesgo Alto",
+      very_high: "Riesgo Muy Alto"
+    };
+
+    const colorClass = riskColors[result.riskLevel];
+
+    const radarData = result.domainScores.map(d => ({
+      domain: d.domain.charAt(0).toUpperCase() + d.domain.slice(1),
+      score: (d.score / d.maxScore) * 100, // normalized to 100
+      fullMark: 100,
+    }));
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="max-w-4xl mx-auto py-8"
+      >
+        <div className="grid md:grid-cols-5 gap-8">
+          
+          <div className="md:col-span-3 space-y-6">
+            <Card className="overflow-hidden border-2">
+              <div className={`p-6 border-b ${colorClass}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold uppercase tracking-wider">Tu Nivel de Riesgo</h2>
+                  {result.riskLevel === 'low' ? <CheckCircle2 className="w-8 h-8" /> : <AlertTriangle className="w-8 h-8" />}
+                </div>
+                <div className="text-4xl font-black mb-2">{riskLabels[result.riskLevel]}</div>
+                <p className="opacity-90">{result.summary}</p>
+              </div>
+              <CardContent className="p-6">
+                <h3 className="font-semibold mb-4 text-lg">Recomendaciones</h3>
+                <ul className="space-y-4">
+                  {result.recommendations.map((rec, i) => (
+                    <li key={i} className="flex items-start">
+                      <div className="mr-3 mt-1 text-primary"><ArrowRight className="w-4 h-4" /></div>
+                      <span className="text-foreground leading-relaxed">{rec}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+
+            {result.factors.length > 0 && (
+              <Card>
+                <CardContent className="p-6">
+                  <h3 className="font-semibold mb-4">Factores Identificados</h3>
+                  <div className="space-y-3">
+                    {result.factors.map((factor, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <span className="text-sm font-medium">{factor.label}</span>
+                        <span className="text-xs px-2 py-1 rounded-full bg-background border">
+                          {factor.severity === 'high' ? 'Alto impacto' : factor.severity === 'moderate' ? 'Impacto medio' : 'Bajo impacto'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <div className="md:col-span-2 space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="font-semibold mb-4 text-center text-sm uppercase text-muted-foreground tracking-wider">Desglose por área</h3>
+                <div className="h-[250px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                      <PolarGrid stroke="hsl(var(--border))" />
+                      <PolarAngleAxis dataKey="domain" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                      <Radar
+                        name="Riesgo"
+                        dataKey="score"
+                        stroke="hsl(var(--primary))"
+                        fill="hsl(var(--primary))"
+                        fillOpacity={0.4}
+                      />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-3">
+              <Link href="/recursos">
+                <Button className="w-full h-12" variant="default">
+                  <MapPin className="w-4 h-4 mr-2" />
+                  Ver Centros de Prueba
+                </Button>
+              </Link>
+              <Link href="/chatbot">
+                <Button className="w-full h-12" variant="outline">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Hablar con el Chatbot
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+        </div>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-muted/20 pb-20">
+      <div className="container mx-auto px-4 pt-10">
+        <AnimatePresence mode="wait">
+          {step === 'intro' && renderIntro()}
+          {step === 'questions' && renderQuestions()}
+          {step === 'review' && renderReview()}
+          {step === 'result' && renderResult()}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
