@@ -43,15 +43,7 @@ function asArray(v: AnswerValue | undefined): string[] {
   return [String(v)];
 }
 
-function ageBucket(age: number): string {
-  if (age < 18) return "<18";
-  if (age <= 24) return "18-24";
-  if (age <= 34) return "25-34";
-  if (age <= 44) return "35-44";
-  return "45+";
-}
-
-// Convertir rango de parejas a número (para puntuación)
+// Convierte el rango de parejas a un número representativo
 function partnersCountToNumber(countStr: string): number {
   switch (countStr) {
     case "0":
@@ -69,8 +61,8 @@ function partnersCountToNumber(countStr: string): number {
   }
 }
 
-// Convertir frecuencia de condón a puntuación (0 a 3)
-function condomScore(freq: string): number {
+// Puntuación base por frecuencia de condón (sin contexto)
+function rawCondomScore(freq: string): number {
   switch (freq) {
     case "never":
       return 3;
@@ -83,6 +75,14 @@ function condomScore(freq: string): number {
     default:
       return 0;
   }
+}
+
+// Determina si la persona ha tenido actividad sexual en el último año
+function hasRecentSexualActivity(
+  sexWithMen: string,
+  sexWithWomen: string,
+): boolean {
+  return sexWithMen === "yes" || sexWithWomen === "yes";
 }
 
 export function computeScore(answers: Answer[]): ScoringResult {
@@ -99,51 +99,48 @@ export function computeScore(answers: Answer[]): ScoringResult {
     domainTotals[domain].max += max;
   }
 
-  // ------------------------------------------------------------
-  // DOMINIO DEMOGRÁFICO
-  // ------------------------------------------------------------
-  const rawAge = getAnswer(answers, "q2_age");
-  const ageNum =
-    typeof rawAge === "number" ? rawAge : parseInt(asString(rawAge), 10);
-  const ageRange = Number.isFinite(ageNum) ? ageBucket(ageNum) : "no_reportada";
-
+  // --------------------------------------------------------------
+  // 1. DEMOGRÁFICO
+  // --------------------------------------------------------------
+  const ageRangeRaw = asString(getAnswer(answers, "q2_age"));
+  const ageRange = ageRangeRaw || "no_reportado";
   let demoScore = 0;
-  if (Number.isFinite(ageNum)) {
-    if (ageNum >= 18 && ageNum <= 34) demoScore += 1; // grupo de mayor actividad sexual
-    if (ageNum < 18) demoScore += 0; // menor riesgo relativo
-  }
+  if (ageRangeRaw === "18-24" || ageRangeRaw === "25-34") demoScore += 1;
   add("demographic", demoScore, 2);
 
   const country = asString(getAnswer(answers, "q3_country_birth"));
   const isForeign = country && country.toLowerCase() !== "colombia";
 
-  // ------------------------------------------------------------
-  // DOMINIO CONDUCTUAL
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 2. CONDUCTUAL
+  // --------------------------------------------------------------
   const sexWithMen = asString(getAnswer(answers, "q11_sex_with_men"));
   const sexWithWomen = asString(getAnswer(answers, "q12_sex_with_women"));
-  const hasSex = sexWithMen === "yes" || sexWithWomen === "yes";
+  const hasSex = hasRecentSexualActivity(sexWithMen, sexWithWomen);
 
   let menCount = 0,
     womenCount = 0;
-  let condomMenScore = 0,
-    condomWomenScore = 0;
+  let menCondomRaw = 0,
+    womenCondomRaw = 0;
 
   if (sexWithMen === "yes") {
     const countStr = asString(getAnswer(answers, "q11_men_partners_count"));
     menCount = partnersCountToNumber(countStr);
-    const condomFreq = asString(getAnswer(answers, "q11_condom_use_men"));
-    condomMenScore = condomScore(condomFreq);
+    menCondomRaw = rawCondomScore(
+      asString(getAnswer(answers, "q11_condom_use_men")),
+    );
   }
   if (sexWithWomen === "yes") {
     const countStr = asString(getAnswer(answers, "q12_women_partners_count"));
     womenCount = partnersCountToNumber(countStr);
-    const condomFreq = asString(getAnswer(answers, "q12_condom_use_women"));
-    condomWomenScore = condomScore(condomFreq);
+    womenCondomRaw = rawCondomScore(
+      asString(getAnswer(answers, "q12_condom_use_women")),
+    );
   }
 
-  // Número total de parejas (categorizado y con peso logarítmico)
   const totalPartners = menCount + womenCount;
+
+  // Puntuación por número de parejas
   let partnersPoints = 0;
   if (totalPartners >= 11) partnersPoints = 4;
   else if (totalPartners >= 6) partnersPoints = 3;
@@ -154,26 +151,46 @@ export function computeScore(answers: Answer[]): ScoringResult {
       label: "Múltiples parejas sexuales en los últimos 12 meses",
       severity: partnersPoints >= 3 ? "high" : "moderate",
     });
+  } else if (totalPartners === 1) {
+    factors.push({
+      label:
+        "Una sola pareja sexual en el último año (riesgo dependiente de su estado serológico)",
+      severity: "low",
+    });
   }
   add("behavioral", partnersPoints, 4);
 
-  // Uso de condón (peor escenario, pero ponderado por número de parejas)
-  let worstCondom = Math.max(condomMenScore, condomWomenScore);
-  // Si no hay parejas de un género, no se penaliza por ese género
-  if (sexWithMen !== "yes") condomMenScore = 0;
-  if (sexWithWomen !== "yes") condomWomenScore = 0;
-  worstCondom = Math.max(condomMenScore, condomWomenScore);
-  let condomPoints = worstCondom;
-  if (totalPartners > 1 && worstCondom >= 2) condomPoints += 1; // extra si muchas parejas y mal uso
+  // Puntuación por uso de condón (contextualizada)
+  const worstRawCondom = Math.max(menCondomRaw, womenCondomRaw);
+  let condomPoints = 0;
+  if (totalPartners === 0) {
+    condomPoints = 0;
+  } else if (totalPartners === 1) {
+    // Pareja única: el no uso de condón es menos riesgoso (se evaluará con clínico)
+    if (worstRawCondom === 3) condomPoints = 1;
+    else if (worstRawCondom === 2) condomPoints = 1;
+    else condomPoints = 0;
+  } else {
+    // Múltiples parejas: el no uso es muy riesgoso
+    if (worstRawCondom === 3) condomPoints = 4;
+    else if (worstRawCondom === 2) condomPoints = 3;
+    else if (worstRawCondom === 1) condomPoints = 1;
+  }
   if (condomPoints >= 2) {
     factors.push({
-      label: "Uso inconsistente o nulo de condón",
+      label: "Uso inconsistente o nulo de condón con múltiples parejas",
       severity: condomPoints >= 3 ? "high" : "moderate",
+    });
+  } else if (totalPartners === 1 && worstRawCondom === 3) {
+    factors.push({
+      label:
+        "No usas condón con tu pareja estable. El riesgo real depende del estado de VIH/ITS de tu pareja.",
+      severity: "low",
     });
   }
   add("behavioral", Math.min(condomPoints, 4), 4);
 
-  // HSH (hombres que tienen sexo con hombres) - factor de alto riesgo en Colombia
+  // HSH (hombres que tienen sexo con hombres)
   const gender = asString(getAnswer(answers, "q1_gender"));
   const isMale = gender === "man";
   const isMSM = isMale && sexWithMen === "yes";
@@ -182,15 +199,15 @@ export function computeScore(answers: Answer[]): ScoringResult {
     hshPoints = 3;
     factors.push({
       label:
-        "Hombre que tiene sexo con hombres (HSH) — alta incidencia en Colombia",
+        "Hombre que tiene sexo con hombres (HSH) — mayor incidencia en Colombia",
       severity: "high",
     });
   }
   add("behavioral", hshPoints, 3);
 
-  // ------------------------------------------------------------
-  // DOMINIO EPIDEMIOLÓGICO
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 3. EPIDEMIOLÓGICO
+  // --------------------------------------------------------------
   let epiScore = 0;
   if (isForeign) {
     epiScore += 1;
@@ -211,7 +228,6 @@ export function computeScore(answers: Answer[]): ScoringResult {
     });
   }
 
-  // Inyección de drogas (con recencia)
   const injected = asString(getAnswer(answers, "q8_injected_drugs"));
   let injectedPoints = 0;
   if (injected === "yes") {
@@ -220,14 +236,13 @@ export function computeScore(answers: Answer[]): ScoringResult {
     else if (recency === "last_year") injectedPoints = 3;
     else injectedPoints = 2;
     factors.push({
-      label: "Inyección de drogas no prescritas (riesgo alto de VIH/ITS)",
+      label: "Inyección de drogas no prescritas",
       severity: injectedPoints >= 4 ? "high" : "moderate",
     });
   }
   epiScore += injectedPoints;
-  add("epidemiological", Math.min(epiScore, 10), 10);
 
-  // Contacto reciente con ITS y relación con pareja VIH (lógica I=I)
+  // Contacto reciente con ITS y lógica I=I
   const recentContact = asString(getAnswer(answers, "q6_recent_contact_sti"));
   const recentWhich = asArray(
     getAnswer(answers, "q6_recent_contact_sti_which"),
@@ -239,7 +254,6 @@ export function computeScore(answers: Answer[]): ScoringResult {
   let recentScore = 0;
   if (recentContact === "yes") {
     if (contactWithHiv && partnerUndetectable) {
-      // Sin riesgo por I=I
       factors.push({
         label:
           "Contacto con pareja con VIH indetectable (I=I) – sin riesgo de transmisión",
@@ -248,8 +262,7 @@ export function computeScore(answers: Answer[]): ScoringResult {
     } else if (contactWithHiv && !partnerUndetectable) {
       recentScore = 5;
       factors.push({
-        label:
-          "Contacto reciente con persona con VIH (tratamiento desconocido o no indetectable)",
+        label: "Contacto reciente con persona con VIH sin tratamiento conocido",
         severity: "high",
       });
     } else if (recentWhich.includes("unknown")) {
@@ -273,31 +286,26 @@ export function computeScore(answers: Answer[]): ScoringResult {
     });
   }
   epiScore += recentScore;
-  add("epidemiological", Math.min(epiScore, 10), 10); // ya sumamos, pero el máximo lo ajustamos después
+  add("epidemiological", Math.min(epiScore, 12), 12);
 
-  // ------------------------------------------------------------
-  // DOMINIO CLÍNICO
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 4. CLÍNICO
+  // --------------------------------------------------------------
   let clinScore = 0;
 
-  // PrEP (protector)
+  // PrEP
   const prep = asString(getAnswer(answers, "q7_prep_use"));
   if (prep === "yes") {
     clinScore -= 3;
-    factors.push({
-      label: "Uso de PrEP (factor protector contra VIH)",
-      severity: "low",
-    });
-  } else if (prep === "sometimes") {
-    clinScore -= 1;
-  }
+    factors.push({ label: "Uso de PrEP (factor protector)", severity: "low" });
+  } else if (prep === "sometimes") clinScore -= 1;
 
-  // Diagnóstico previo de ITS (incluye especificidad)
+  // ITS previas
   const priorSti = asString(getAnswer(answers, "q5_prior_sti_diagnosis"));
   if (priorSti === "yes") {
     const priorList = asArray(getAnswer(answers, "q5_prior_sti_list"));
-    let priorPoints = 2; // base
-    if (priorList.includes("hiv")) priorPoints += 2;
+    let priorPoints = 2;
+    if (priorList.includes("hiv")) priorPoints += 3;
     if (priorList.includes("syphilis")) priorPoints += 1;
     if (priorList.includes("other")) priorPoints += 1;
     clinScore += priorPoints;
@@ -316,31 +324,38 @@ export function computeScore(answers: Answer[]): ScoringResult {
     });
   }
 
-  // Pareja con VIH (solo si no fue ya considerado como contacto reciente con VIH indetectable)
-  if (
-    partnerHiv === "yes_unknown" &&
-    !(contactWithHiv && partnerUndetectable)
-  ) {
-    clinScore += 4;
+  // Estado de la pareja con VIH
+  if (partnerHiv === "yes_unknown") {
+    clinScore += 5;
     factors.push({
       label: "Pareja con VIH sin tratamiento o carga viral desconocida",
       severity: "high",
     });
   } else if (partnerHiv === "yes_undetectable") {
-    // No puntúa, ya es factor protector
     factors.push({
       label: "Pareja con VIH indetectable (I=I) – no transmisible",
       severity: "low",
     });
+    if (totalPartners === 1 && worstRawCondom === 3) clinScore -= 1;
   } else if (partnerHiv === "dont_know" && hasSex) {
-    clinScore += 1;
+    clinScore += 2;
     factors.push({
       label: "Desconocimiento del estado VIH de las parejas",
       severity: "moderate",
     });
+  } else if (
+    partnerHiv === "no" &&
+    totalPartners === 1 &&
+    worstRawCondom === 3
+  ) {
+    factors.push({
+      label: "Pareja estable sin VIH – riesgo bajo",
+      severity: "low",
+    });
+    clinScore -= 1;
   }
 
-  // Última prueba de VIH
+  // Última prueba de VIH (solo para puntuación, no para recomendación aún)
   const lastTest = asString(getAnswer(answers, "q13_last_hiv_test"));
   if (lastTest === "never" && hasSex) {
     clinScore += 2;
@@ -348,19 +363,15 @@ export function computeScore(answers: Answer[]): ScoringResult {
       label: "Nunca se ha realizado la prueba de VIH",
       severity: "moderate",
     });
-  } else if (lastTest === ">12m" && hasSex) {
-    clinScore += 1;
-  } else if (lastTest === "<3m" && hasSex) {
-    clinScore -= 1;
-  }
+  } else if (lastTest === ">12m" && hasSex) clinScore += 1;
+  else if (lastTest === "<3m" && hasSex) clinScore -= 1;
 
-  // Límites clínicos
   clinScore = Math.max(0, clinScore);
-  add("clinical", Math.min(clinScore, 12), 12);
+  add("clinical", Math.min(clinScore, 15), 15);
 
-  // ------------------------------------------------------------
-  // PUNTAJE TOTAL Y NIVEL DE RIESGO
-  // ------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 5. PUNTAJE TOTAL Y NIVEL DE RIESGO
+  // --------------------------------------------------------------
   const totalScore =
     domainTotals.demographic.score +
     domainTotals.behavioral.score +
@@ -369,67 +380,137 @@ export function computeScore(answers: Answer[]): ScoringResult {
 
   let riskLevel: ScoringResult["riskLevel"];
   let summary: string;
-  let recommendations: string[];
 
   if (totalScore <= 3) {
     riskLevel = "low";
     summary =
-      "Riesgo BAJO. Las prácticas reportadas se asocian con baja probabilidad de exposición al VIH.";
-    recommendations = [
-      "✅ Mantén el uso de condón en todas tus relaciones sexuales.",
-      "🩺 Realízate una prueba de VIH al menos una vez al año si tienes vida sexual activa.",
-      "📚 Infórmate sobre síntomas de ITS y consulta si aparecen.",
-    ];
+      "Riesgo BAJO. Muy baja probabilidad de exposición al VIH según la evidencia.";
   } else if (totalScore <= 7) {
     riskLevel = "moderate";
     summary =
-      "Riesgo MODERADO. Se identifican algunos factores que requieren atención preventiva.";
-    recommendations = [
-      "🩸 Realízate una prueba de VIH y otras ITS en los próximos 1 a 3 meses.",
-      "🔁 Refuerza el uso correcto y consistente del condón.",
-      "💊 Conversa con un profesional de salud sobre la PrEP si tienes prácticas de riesgo frecuentes.",
-    ];
-  } else if (totalScore <= 11) {
+      "Riesgo MODERADO. Algunas prácticas aumentan la posibilidad de exposición.";
+  } else if (totalScore <= 12) {
     riskLevel = "high";
     summary =
-      "Riesgo ALTO. Es importante que actúes pronto para cuidar tu salud y la de tus parejas.";
-    recommendations = [
-      "🏥 Acude a un centro de salud en Manizales para una prueba de VIH y otras ITS lo antes posible.",
-      "🛡️ Pregunta por la PrEP — es altamente eficaz para prevenir el VIH.",
-      "⏱️ Si tuviste una exposición de alto riesgo en las últimas 72 horas, consulta por PEP (profilaxis post-exposición).",
-    ];
+      "Riesgo ALTO. Existen factores significativos que requieren intervención preventiva.";
   } else {
     riskLevel = "very_high";
     summary =
-      "Riesgo MUY ALTO. Te recomendamos hacer una prueba de VIH cuanto antes y buscar asesoría profesional.";
-    recommendations = [
-      "⚠️ Realízate una prueba de VIH en los próximos días (muchas son gratuitas en Manizales).",
-      "🚨 Si tuviste una exposición de riesgo en las últimas 72 horas, acude a urgencias por PEP.",
-      "💊 Considera iniciar PrEP de manera estable.",
-      "❤️ Recuerda: el diagnóstico temprano permite vivir con VIH una vida plena y saludable.",
-    ];
+      "Riesgo MUY ALTO. Se recomienda acción inmediata para proteger tu salud.";
   }
 
+  // --------------------------------------------------------------
+  // 6. RECOMENDACIONES (INTELIGENTES, BASADAS EN MySTIRisk)
+  // --------------------------------------------------------------
+  const recommendations: string[] = [];
+
+  // Regla para sugerir prueba de VIH (solo si es relevante)
+  const shouldSuggestTesting = (() => {
+    if (riskLevel === "very_high") return true;
+    if (riskLevel === "high") return true;
+    if (riskLevel === "moderate" && lastTest !== "<3m") return true;
+    if (riskLevel === "moderate" && lastTest === "<3m") return false; // No repetir tan pronto
+    if (riskLevel === "low" && (lastTest === "never" || lastTest === ">12m"))
+      return true;
+    return false;
+  })();
+
+  if (shouldSuggestTesting) {
+    if (riskLevel === "very_high" || riskLevel === "high") {
+      recommendations.push(
+        "🩸 Realízate una prueba de VIH y otras ITS lo antes posible (en los próximos días).",
+      );
+    } else if (riskLevel === "moderate") {
+      recommendations.push(
+        "🩸 Considera hacerte una prueba de VIH en los próximos 1 a 3 meses.",
+      );
+    } else if (
+      riskLevel === "low" &&
+      (lastTest === "never" || lastTest === ">12m")
+    ) {
+      recommendations.push(
+        "🩸 Si nunca te has hecho la prueba o pasó más de un año, es buen momento para hacerla.",
+      );
+    }
+  } else if (
+    lastTest === "<3m" &&
+    (riskLevel === "low" || riskLevel === "moderate")
+  ) {
+    recommendations.push(
+      "✅ Tu última prueba de VIH fue reciente (<3 meses). No es necesario repetirla ahora, pero mantén las conductas seguras.",
+    );
+  }
+
+  // Recomendaciones de prevención según nivel
+  if (riskLevel === "high" || riskLevel === "very_high") {
+    recommendations.push(
+      "🛡️ Evalúa la PrEP con un profesional de salud (es altamente efectiva).",
+    );
+    if (prep === "dont_know") {
+      recommendations.push(
+        "❓ La PrEP es una pastilla diaria que previene el VIH. Pregunta a tu médico.",
+      );
+    }
+    // PEP solo si exposición reciente (no siempre, pero se puede mencionar condicional)
+    const recentExposure =
+      (recentContact === "yes" && contactWithHiv && !partnerUndetectable) ||
+      (injected === "yes" && injectedPoints >= 4);
+    if (recentExposure) {
+      recommendations.push(
+        "⏱️ Si tuviste una exposición de alto riesgo en las últimas 72 horas, consulta por PEP.",
+      );
+    }
+  } else if (riskLevel === "moderate") {
+    recommendations.push(
+      "🔁 Refuerza el uso correcto del condón, especialmente si tienes múltiples parejas.",
+    );
+    if (prep !== "yes" && (isMSM || totalPartners >= 3)) {
+      recommendations.push(
+        "💬 Habla con un profesional sobre la PrEP como prevención adicional.",
+      );
+    }
+  } else {
+    recommendations.push(
+      "✅ Mantén el uso de condón o la exclusividad con pruebas recientes si tienes pareja estable.",
+    );
+    recommendations.push(
+      "📚 Infórmate sobre síntomas de ITS y consulta si aparecen.",
+    );
+  }
+
+  // Recomendaciones específicas por síntomas
   if (asString(getAnswer(answers, "q4_symptoms")) === "yes") {
     recommendations.unshift(
       "🔴 Presentas síntomas compatibles con ITS. ¡Acude a un centro de salud de inmediato!",
     );
   }
 
-  if (
-    partnerHiv === "yes_unknown" &&
-    !(contactWithHiv && partnerUndetectable)
+  // Recomendaciones por pareja con VIH
+  if (partnerHiv === "yes_unknown") {
+    recommendations.push(
+      "👥 Si tu pareja tiene VIH, es fundamental que reciba tratamiento. Usa condón o PrEP mientras no sea indetectable.",
+    );
+  } else if (
+    partnerHiv === "yes_undetectable" &&
+    totalPartners === 1 &&
+    worstRawCondom === 3
   ) {
     recommendations.push(
-      "👥 Si tu pareja vive con VIH, es fundamental que reciba tratamiento. Usa condón y consulta por PrEP.",
+      "ℹ️ Tu pareja con VIH es indetectable (I=I). No hay riesgo de transmisión, incluso sin condón. Sigue con sus controles médicos.",
     );
   }
 
+  // Recomendaciones por drogas inyectables
   if (injected === "yes" && injectedPoints >= 3) {
     recommendations.push(
-      "💉 Evita compartir jeringas. En Manizales existen programas de reducción de daños (por ejemplo, Profamilia y la Secretaría de Salud).",
+      "💉 No compartas jeringas. Existen programas de reducción de daños en Manizales (Profamilia, Secretaría de Salud).",
     );
   }
+
+  // Eliminar duplicados (por si acaso)
+  const uniqueRecommendations = [
+    ...new Map(recommendations.map((r) => [r, r])).values(),
+  ];
 
   const domainScores: DomainScore[] = [
     {
@@ -458,7 +539,7 @@ export function computeScore(answers: Answer[]): ScoringResult {
     riskLevel,
     riskScore: totalScore,
     summary,
-    recommendations,
+    recommendations: uniqueRecommendations,
     factors,
     domainScores,
     ageRange,
