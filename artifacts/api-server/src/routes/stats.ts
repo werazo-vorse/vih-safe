@@ -1,35 +1,35 @@
 import { Router, type IRouter } from "express";
 import { db, assessmentsTable, chatMessagesTable, quizCompletionsTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { count } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 router.get("/stats/summary", async (_req, res) => {
-  const [{ count: totalAssessmentsCount }] = await db
-    .select({ count: sql<number>`count(*)::int` })
+  const [totalRow] = await db
+    .select({ value: count() })
     .from(assessmentsTable);
 
   const distribution = await db
     .select({
       level: assessmentsTable.riskLevel,
-      count: sql<number>`count(*)::int`,
+      value: count(),
     })
     .from(assessmentsTable)
     .groupBy(assessmentsTable.riskLevel);
 
-  const [{ count: chatMessages }] = await db
-    .select({ count: sql<number>`count(*)::int` })
+  const [chatRow] = await db
+    .select({ value: count() })
     .from(chatMessagesTable);
 
-  const [{ count: modulesCompleted }] = await db
-    .select({ count: sql<number>`count(*)::int` })
+  const [quizRow] = await db
+    .select({ value: count() })
     .from(quizCompletionsTable);
 
   res.json({
-    totalAssessments: totalAssessmentsCount,
-    riskDistribution: distribution.map((d) => ({ level: d.level, count: d.count })),
-    modulesCompleted,
-    chatMessages,
+    totalAssessments: totalRow?.value ?? 0,
+    riskDistribution: distribution.map((d) => ({ level: d.level, count: d.value })),
+    modulesCompleted: quizRow?.value ?? 0,
+    chatMessages: chatRow?.value ?? 0,
   });
 });
 

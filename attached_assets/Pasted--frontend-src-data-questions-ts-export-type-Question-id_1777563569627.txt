@@ -1,3 +1,4 @@
+// frontend/src/data/questions.ts
 export type Question = {
   id: string;
   order: number;
@@ -43,6 +44,7 @@ const STI_LIST_OPTS = [
   { value: "unknown", label: "No sé cuál" },
 ];
 
+// Opciones para contacto reciente (primera parte)
 const RECENT_CONTACT_OPTS = [
   { value: "yes", label: "Sí" },
   { value: "no", label: "No" },
@@ -50,6 +52,7 @@ const RECENT_CONTACT_OPTS = [
 ];
 
 export const QUESTIONS: Question[] = [
+  // 1. Género (fija)
   {
     id: "q1_gender",
     order: 1,
@@ -63,6 +66,7 @@ export const QUESTIONS: Question[] = [
       { value: "other", label: "Otro / Prefiero no responder" },
     ],
   },
+  // 2. Edad (fija)
   {
     id: "q2_age",
     order: 2,
@@ -71,6 +75,7 @@ export const QUESTIONS: Question[] = [
     domain: "demographic",
     conditional: false,
   },
+  // 3. País de nacimiento (fija)
   {
     id: "q3_country_birth",
     order: 3,
@@ -81,6 +86,7 @@ export const QUESTIONS: Question[] = [
     conditional: false,
     defaultValue: "Colombia",
   },
+  // 4. Síntomas actuales (fija)
   {
     id: "q4_symptoms",
     order: 4,
@@ -93,6 +99,7 @@ export const QUESTIONS: Question[] = [
       { value: "no", label: "No" },
     ],
   },
+  // 5. Diagnóstico previo de ITS (fija)
   {
     id: "q5_prior_sti_diagnosis",
     order: 5,
@@ -105,6 +112,7 @@ export const QUESTIONS: Question[] = [
       { value: "no", label: "No" },
     ],
   },
+  // 6. ¿Qué ITS? (condicional a q5_prior_sti_diagnosis = yes)
   {
     id: "q5_prior_sti_list",
     order: 6,
@@ -115,6 +123,7 @@ export const QUESTIONS: Question[] = [
     showIf: { questionId: "q5_prior_sti_diagnosis", equals: ["yes"] },
     options: STI_LIST_OPTS,
   },
+  // 7. Contacto reciente con persona con ITS (fija, pero ahora con tres opciones)
   {
     id: "q6_recent_contact_sti",
     order: 7,
@@ -124,6 +133,7 @@ export const QUESTIONS: Question[] = [
     conditional: false,
     options: RECENT_CONTACT_OPTS,
   },
+  // 8. (NUEVA) ¿Qué ITS? (condicional a q6_recent_contact_sti = yes)
   {
     id: "q6_recent_contact_sti_which",
     order: 8,
@@ -132,8 +142,9 @@ export const QUESTIONS: Question[] = [
     domain: "epidemiological",
     conditional: true,
     showIf: { questionId: "q6_recent_contact_sti", equals: ["yes"] },
-    options: STI_LIST_OPTS,
+    options: STI_LIST_OPTS, // incluye "no sé cuál"
   },
+  // 9. Uso de PrEP (fija)
   {
     id: "q7_prep_use",
     order: 9,
@@ -149,6 +160,7 @@ export const QUESTIONS: Question[] = [
       { value: "dont_know", label: "No sé qué es" },
     ],
   },
+  // 10. Inyección de drogas (fija)
   {
     id: "q8_injected_drugs",
     order: 10,
@@ -161,6 +173,7 @@ export const QUESTIONS: Question[] = [
       { value: "no", label: "No" },
     ],
   },
+  // 11. ¿Cuándo fue la última vez? (condicional)
   {
     id: "q8_injected_drugs_last",
     order: 11,
@@ -171,6 +184,7 @@ export const QUESTIONS: Question[] = [
     showIf: { questionId: "q8_injected_drugs", equals: ["yes"] },
     options: INJECTED_LAST_OPTS,
   },
+  // 12. Sexo con alguien fuera de Colombia (fija)
   {
     id: "q9_sex_abroad",
     order: 12,
@@ -183,6 +197,7 @@ export const QUESTIONS: Question[] = [
       { value: "no", label: "No" },
     ],
   },
+  // 13. Trabajo sexual (recibir dinero) (fija)
   {
     id: "q10_sex_worker",
     order: 13,
@@ -196,6 +211,7 @@ export const QUESTIONS: Question[] = [
       { value: "no", label: "No" },
     ],
   },
+  // 14. ¿Sexo con hombres? (fija)
   {
     id: "q11_sex_with_men",
     order: 14,
@@ -208,6 +224,7 @@ export const QUESTIONS: Question[] = [
       { value: "no", label: "No" },
     ],
   },
+  // 15. Número de parejas masculinas (condicional)
   {
     id: "q11_men_partners_count",
     order: 15,
@@ -218,6 +235,7 @@ export const QUESTIONS: Question[] = [
     showIf: { questionId: "q11_sex_with_men", equals: ["yes"] },
     options: COUNT_OPTS,
   },
+  // 16. Frecuencia de condón con hombres (condicional)
   {
     id: "q11_condom_use_men",
     order: 16,
@@ -228,6 +246,7 @@ export const QUESTIONS: Question[] = [
     showIf: { questionId: "q11_sex_with_men", equals: ["yes"] },
     options: FREQ,
   },
+  // 17. ¿Sexo con mujeres? (fija)
   {
     id: "q12_sex_with_women",
     order: 17,
@@ -240,6 +259,7 @@ export const QUESTIONS: Question[] = [
       { value: "no", label: "No" },
     ],
   },
+  // 18. Número de parejas femeninas (condicional)
   {
     id: "q12_women_partners_count",
     order: 18,
@@ -250,6 +270,7 @@ export const QUESTIONS: Question[] = [
     showIf: { questionId: "q12_sex_with_women", equals: ["yes"] },
     options: COUNT_OPTS,
   },
+  // 19. Frecuencia de condón con mujeres (condicional)
   {
     id: "q12_condom_use_women",
     order: 19,
@@ -260,6 +281,7 @@ export const QUESTIONS: Question[] = [
     showIf: { questionId: "q12_sex_with_women", equals: ["yes"] },
     options: FREQ,
   },
+  // 20. Última prueba de VIH (fija)
   {
     id: "q13_last_hiv_test",
     order: 20,
@@ -274,6 +296,7 @@ export const QUESTIONS: Question[] = [
       { value: "never", label: "Nunca me he hecho la prueba" },
     ],
   },
+  // 21. Pareja con VIH (condicional: solo si ha tenido sexo con hombres o mujeres)
   {
     id: "q14_partner_hiv",
     order: 21,
@@ -281,6 +304,7 @@ export const QUESTIONS: Question[] = [
     type: "single",
     domain: "clinical",
     conditional: true,
+    showIf: undefined, // se maneja en frontend con regla: hasMen o hasWomen
     options: [
       { value: "yes_undetectable", label: "Sí, y tiene carga viral indetectable (I=I)" },
       { value: "yes_unknown", label: "Sí, no sé su estado de tratamiento" },

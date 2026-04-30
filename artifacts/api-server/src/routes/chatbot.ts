@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, chatMessagesTable } from "@workspace/db";
 import { SendChatMessageBody } from "@workspace/api-zod";
-import { openai } from "../lib/openai.js";
+import { ai } from "../lib/gemini.js";
 
 const router: IRouter = Router();
 
@@ -34,17 +34,20 @@ router.post("/chatbot/message", async (req, res) => {
   const { messages } = parsed.data;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5.4",
-      max_completion_tokens: 4096,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-      ],
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        responseMimeType: "application/json",
+        maxOutputTokens: 8192,
+      },
     });
 
-    const raw = completion.choices[0]?.message?.content ?? "{}";
+    const raw = response.text ?? "{}";
     let parsedReply: { reply?: string; suggestions?: string[] };
     try {
       parsedReply = JSON.parse(raw);
@@ -52,8 +55,12 @@ router.post("/chatbot/message", async (req, res) => {
       parsedReply = { reply: raw, suggestions: [] };
     }
 
-    const reply = parsedReply.reply?.trim() || "Lo siento, no pude generar una respuesta. ¿Puedes reformular tu pregunta?";
-    const suggestions = Array.isArray(parsedReply.suggestions) ? parsedReply.suggestions.slice(0, 3) : [];
+    const reply =
+      parsedReply.reply?.trim() ||
+      "Lo siento, no pude generar una respuesta. ¿Puedes reformular tu pregunta?";
+    const suggestions = Array.isArray(parsedReply.suggestions)
+      ? parsedReply.suggestions.slice(0, 3)
+      : [];
 
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (lastUser) {

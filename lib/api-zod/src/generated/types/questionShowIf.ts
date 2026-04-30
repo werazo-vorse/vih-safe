@@ -7,6 +7,6 @@
  */
 
 export type QuestionShowIf = {
-  questionId?: string;
-  equals?: string[];
+  questionId: string;
+  equals: string[];
 };

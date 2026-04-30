@@ -237,6 +237,7 @@ components:
           type: boolean
         showIf:
           type: object
+          required: [questionId, equals]
           properties:
             questionId:
               type: string

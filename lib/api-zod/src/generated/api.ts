@@ -34,8 +34,8 @@ export const GetQuestionsResponse = zod.object({
       conditional: zod.boolean(),
       showIf: zod
         .object({
-          questionId: zod.string().optional(),
-          equals: zod.array(zod.string()).optional(),
+          questionId: zod.string(),
+          equals: zod.array(zod.string()),
         })
         .optional(),
       options: zod

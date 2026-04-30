@@ -1,3 +1,4 @@
+// frontend/src/utils/computeScore.ts
 import type { Question } from "../data/questions.js";
 import { QUESTIONS } from "../data/questions.js";
 
@@ -18,8 +19,6 @@ export type ScoringResult = {
   ageRange: string;
 };
 
-const QUESTION_MAP = new Map<string, Question>(QUESTIONS.map((q) => [q.id, q]));
-
 function getAnswer(answers: Answer[], questionId: string): AnswerValue | undefined {
   return answers.find((a) => a.questionId === questionId)?.value;
 }
@@ -34,14 +33,6 @@ function asArray(v: AnswerValue | undefined): string[] {
   if (v === undefined) return [];
   if (Array.isArray(v)) return v;
   return [String(v)];
-}
-
-function ageBucket(age: number): string {
-  if (age < 18) return "<18";
-  if (age <= 24) return "18-24";
-  if (age <= 34) return "25-34";
-  if (age <= 44) return "35-44";
-  return "45+";
 }
 
 export function computeScore(answers: Answer[]): ScoringResult {
@@ -59,11 +50,10 @@ export function computeScore(answers: Answer[]): ScoringResult {
   }
 
   // ---------- DEMOGRÁFICO ----------
-  const rawAge = getAnswer(answers, "q2_age");
-  const ageNum = typeof rawAge === "number" ? rawAge : parseInt(asString(rawAge), 10);
-  const ageRange = Number.isFinite(ageNum) ? ageBucket(ageNum) : "no_reportada";
+  const age = asString(getAnswer(answers, "q2_age"));
+  const ageRange = age || "no_reportada";
   let demoScore = 0;
-  if (Number.isFinite(ageNum) && ageNum >= 18 && ageNum <= 34) demoScore += 1;
+  if (age && (age === "18-24" || age === "25-34")) demoScore += 1;
   add("demographic", demoScore, 2);
 
   const country = asString(getAnswer(answers, "q3_country_birth"));
@@ -74,8 +64,7 @@ export function computeScore(answers: Answer[]): ScoringResult {
   const sexWithWomen = asString(getAnswer(answers, "q12_sex_with_women"));
   const hasSex = sexWithMen === "yes" || sexWithWomen === "yes";
 
-  let menCount = 0;
-  let condomMenScore = 0;
+  let menCount = 0, condomMenScore = 0;
   if (sexWithMen === "yes") {
     const countStr = asString(getAnswer(answers, "q11_men_partners_count"));
     if (countStr === "2-5") menCount = 1;
@@ -87,8 +76,7 @@ export function computeScore(answers: Answer[]): ScoringResult {
     else if (condom === "almost_always") condomMenScore = 1;
   }
 
-  let womenCount = 0;
-  let condomWomenScore = 0;
+  let womenCount = 0, condomWomenScore = 0;
   if (sexWithWomen === "yes") {
     const countStr = asString(getAnswer(answers, "q12_women_partners_count"));
     if (countStr === "2-5") womenCount = 1;
@@ -149,17 +137,19 @@ export function computeScore(answers: Answer[]): ScoringResult {
     factors.push({ label: "Inyección de drogas no prescritas", severity: "high" });
   }
 
-  // --- Contacto reciente con ITS (lógica con I=I) ---
+  // --- Contacto reciente con ITS (lógica principal con I=I) ---
   const recentContact = asString(getAnswer(answers, "q6_recent_contact_sti"));
   const recentWhich = asArray(getAnswer(answers, "q6_recent_contact_sti_which"));
   const partnerHiv = asString(getAnswer(answers, "q14_partner_hiv"));
 
+  // Determinar si el contacto reciente incluyó VIH y si esa pareja es la misma con carga indetectable
   const recentContactWithHiv = recentContact === "yes" && recentWhich.includes("hiv");
   const partnerIsUndetectable = partnerHiv === "yes_undetectable";
 
   let recentContactScore = 0;
   if (recentContact === "yes") {
     if (recentContactWithHiv && partnerIsUndetectable) {
+      // No suma riesgo porque I=I (indetectable = intransmisible)
       factors.push({
         label: "Contacto con pareja con VIH pero con carga viral indetectable (I=I) — sin riesgo de transmisión",
         severity: "low",
@@ -192,7 +182,7 @@ export function computeScore(answers: Answer[]): ScoringResult {
   }
 
   epiScore += recentContactScore;
-  add("epidemiological", epiScore, 16);
+  add("epidemiological", epiScore, 16); // máximo aumentado para contemplar nuevos puntajes
 
   // ---------- CLÍNICO ----------
   let clinScore = 0;
@@ -213,10 +203,12 @@ export function computeScore(answers: Answer[]): ScoringResult {
     factors.push({ label: "Síntomas actuales compatibles con ITS", severity: "high" });
   }
 
+  // Pareja con VIH (si ya no fue considerada en contacto reciente por I=I, aquí no se suma)
   if (partnerHiv === "yes_unknown" && !(recentContactWithHiv && partnerIsUndetectable)) {
     clinScore += 4;
     factors.push({ label: "Pareja con VIH sin tratamiento o carga viral desconocida", severity: "high" });
   } else if (partnerHiv === "yes_undetectable") {
+    // No suma riesgo, ya se anotó como factor protector antes
     factors.push({ label: "Pareja con VIH en tratamiento (I=I) — no transmisible", severity: "low" });
   } else if (partnerHiv === "dont_know" && hasSex) {
     clinScore += 1;
@@ -280,9 +272,7 @@ export function computeScore(answers: Answer[]): ScoringResult {
   }
 
   if (asString(getAnswer(answers, "q4_symptoms")) === "yes") {
-    recommendations.unshift(
-      "Atención inmediata: presentas síntomas compatibles con ITS. Acude a un centro de salud lo antes posible.",
-    );
+    recommendations.unshift("🔴 Presentas síntomas compatibles con ITS. ¡Acude a un centro de salud de inmediato!");
   }
 
   const domainScores: DomainScore[] = [
@@ -302,5 +292,3 @@ export function computeScore(answers: Answer[]): ScoringResult {
     ageRange,
   };
 }
-
-export { QUESTION_MAP };
