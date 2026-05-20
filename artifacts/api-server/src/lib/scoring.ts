@@ -102,7 +102,7 @@ export function computeScore(answers: Answer[]): ScoringResult {
   // --------------------------------------------------------------
   // 1. DEMOGRÁFICO
   // --------------------------------------------------------------
-  const ageRangeRaw = asString(getAnswer(answers, "q2_age"));
+  const ageRangeRaw = asString(getAnswer(answers, "q1_age"));
   const ageRange = ageRangeRaw || "no_reportado";
   let demoScore = 0;
   if (ageRangeRaw === "18-24" || ageRangeRaw === "25-34") demoScore += 1;
