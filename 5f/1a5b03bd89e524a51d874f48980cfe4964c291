@@ -1,0 +1,43 @@
+docs/deployment-plan.md
+  s_b167e59f71d03f::t_62fbe3f1c2c50f 104-105
+  s_b167e59f71d03f::t_fee698b3dfd4eb 68-69
+  s_b167e59f71d03f::t_65c53b9cc68c0f 1-67,70-101
+  s_b167e59f71d03f::t_5391c676f403ec 102-103,106
+artifacts/vihsafe/vite.config.ts
+  s_b167e59f71d03f::t_5ff01e904cd0b3 7,14
+artifacts/vihsafe/functions/api/[[path]].ts
+  s_b167e59f71d03f::t_5ff01e904cd0b3 1-18,21-60,95-112,117-140,154-197,199-248,251-288,294-305,307-310,312,314-318,323-329,332-388,396-429
+  s_b167e59f71d03f::t_dd14a08f518c1a 141-142
+  s_b167e59f71d03f::t_03f3c144524bef 19-20,61-94,113-116,143-153,198,249-250,289-293,306,313,330-331,389-395
+  s_b167e59f71d03f::t_af131b61d99071 311,319-322
+.npmrc
+  s_b167e59f71d03f::t_c98ed642c3e1a2 3-4
+docs/deployment-cloudflare-supabase.md
+  s_b167e59f71d03f::t_5ff01e904cd0b3 1-21,24-63
+  s_b167e59f71d03f::t_fee698b3dfd4eb 22-23
+artifacts/api-server/src/lib/scoring.ts
+  s_b167e59f71d03f::t_386281b248f5a6 105
+supabase/schema.sql
+  s_b167e59f71d03f::t_fee698b3dfd4eb 42-52
+  s_b167e59f71d03f::t_5ff01e904cd0b3 1-41,53-55
+artifacts/vihsafe/wrangler.toml
+  s_b167e59f71d03f::t_5ff01e904cd0b3 1-6
+artifacts/vihsafe/.env.example
+  s_b167e59f71d03f::t_5ff01e904cd0b3 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "5f1a5b03bd89e524a51d874f48980cfe4964c291",
+  "prompts": {},
+  "sessions": {
+    "s_b167e59f71d03f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e43d2-d682-79c0-9096-fc16711b4838",
+        "model": "gpt-5.5"
+      },
+      "human_author": "wreyes <wilmer.reyes@mercadolibre.com.co>"
+    }
+  }
+}
