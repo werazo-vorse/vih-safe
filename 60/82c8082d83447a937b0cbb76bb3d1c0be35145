@@ -1,0 +1,25 @@
+functions/api/[[path]].ts
+  s_b167e59f71d03f::t_6645f6451c9b5b 1-4
+docs/deployment-cloudflare-supabase.md
+  s_b167e59f71d03f::t_f04501d096a7d5 8,31,58
+docs/deployment-plan.md
+  s_b167e59f71d03f::t_f04501d096a7d5 10,80
+wrangler.toml
+  s_b167e59f71d03f::t_d687e356044d90 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "6082c8082d83447a937b0cbb76bb3d1c0be35145",
+  "prompts": {},
+  "sessions": {
+    "s_b167e59f71d03f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e43d2-d682-79c0-9096-fc16711b4838",
+        "model": "gpt-5.5"
+      },
+      "human_author": "wreyes <wilmer.reyes@mercadolibre.com.co>"
+    }
+  }
+}
