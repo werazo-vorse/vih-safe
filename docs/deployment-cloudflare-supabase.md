@@ -5,7 +5,7 @@ This deployment path keeps the existing database-backed product use cases while 
 ## Runtime
 
 - Cloudflare Pages serves the Vite build in `artifacts/vihsafe/dist/public`.
-- Cloudflare Pages Functions handle `/api/*` from `artifacts/vihsafe/functions/api/[[path]].ts`.
+- Cloudflare Pages Functions handle `/api/*` from `functions/api/[[path]].ts`.
 - Supabase stores assessments, chat messages, quiz completions, and aggregate stats source data.
 - Gemini is called through the public Gemini API with `GEMINI_API_KEY`.
 
@@ -28,7 +28,7 @@ Use these build settings:
 - Project root: repository root
 - Build command: `pnpm --filter @workspace/vihsafe run build`
 - Build output directory: `artifacts/vihsafe/dist/public`
-- Functions directory: `artifacts/vihsafe/functions`
+- Functions directory: `functions`
 
 Set these environment variables in Cloudflare Pages:
 
@@ -55,7 +55,7 @@ pnpm --filter @workspace/vihsafe run build
 Run a local Cloudflare Pages preview after installing Wrangler:
 
 ```sh
-pnpm dlx wrangler pages dev artifacts/vihsafe/dist/public --functions artifacts/vihsafe/functions
+pnpm dlx wrangler pages dev artifacts/vihsafe/dist/public --functions functions
 ```
 
 ## Why Express Is Not Used Here

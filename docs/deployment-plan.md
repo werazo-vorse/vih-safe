@@ -7,7 +7,7 @@ Deploy VIHSafe at the lowest practical cost while keeping all existing product f
 ## Target Architecture
 
 - Frontend: Cloudflare Pages serving the Vite build from `artifacts/vihsafe/dist/public`.
-- API: Cloudflare Pages Functions under `artifacts/vihsafe/functions`.
+- API: Cloudflare Pages Functions under `functions`.
 - Database: Supabase Postgres.
 - AI: Google Gemini API using `GEMINI_API_KEY`.
 
@@ -77,7 +77,7 @@ Row-level security is enabled. The Cloudflare function uses the service role key
 4. Configure Cloudflare Pages:
    - Build command: `pnpm --filter @workspace/vihsafe run build`
    - Build output directory: `artifacts/vihsafe/dist/public`
-   - Functions directory: `artifacts/vihsafe/functions`
+   - Functions directory: `functions`
 5. Add the required environment variables in Cloudflare.
 6. Deploy.
 7. Smoke test the application:

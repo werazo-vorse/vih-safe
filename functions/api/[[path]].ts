@@ -1,7 +1,7 @@
-import { CLINICS } from "../../../api-server/src/data/clinics";
-import { EDUCATION_MODULES } from "../../../api-server/src/data/education";
-import { QUESTIONS } from "../../../api-server/src/data/questions";
-import { computeScore, type Answer } from "../../../api-server/src/lib/scoring";
+import { CLINICS } from "../../artifacts/api-server/src/data/clinics";
+import { EDUCATION_MODULES } from "../../artifacts/api-server/src/data/education";
+import { QUESTIONS } from "../../artifacts/api-server/src/data/questions";
+import { computeScore, type Answer } from "../../artifacts/api-server/src/lib/scoring";
 
 type Env = {
   GEMINI_API_KEY?: string;
