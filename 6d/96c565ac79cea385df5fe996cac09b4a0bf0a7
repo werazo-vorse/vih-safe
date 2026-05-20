@@ -1,0 +1,21 @@
+artifacts/mockup-sandbox/vite.config.ts
+  s_b167e59f71d03f::t_9b1d758b41058f 8,15
+package.json
+  s_b167e59f71d03f::t_9b1d758b41058f 8-9,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "6d96c565ac79cea385df5fe996cac09b4a0bf0a7",
+  "prompts": {},
+  "sessions": {
+    "s_b167e59f71d03f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e43d2-d682-79c0-9096-fc16711b4838",
+        "model": "gpt-5.5"
+      },
+      "human_author": "wreyes <wilmer.reyes@mercadolibre.com.co>"
+    }
+  }
+}
