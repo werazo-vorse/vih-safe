@@ -1,0 +1,19 @@
+package.json
+  s_b167e59f71d03f::t_a7652cbf84c285 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "b1cb7f3518ebf54380ef8f44863ca3b9399e3c10",
+  "prompts": {},
+  "sessions": {
+    "s_b167e59f71d03f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e43d2-d682-79c0-9096-fc16711b4838",
+        "model": "gpt-5.5"
+      },
+      "human_author": "wreyes <wilmer.reyes@mercadolibre.com.co>"
+    }
+  }
+}
